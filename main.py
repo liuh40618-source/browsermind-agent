@@ -36,7 +36,7 @@ from agent.planner import Planner
 from agent.reflection import Reflection
 from agent.analyst import Analyst
 from agent.agent_loop import AgentLoop
-from config import settings
+from config import settings, __version__
 from store import store
 from settings_store import settings_store, PRESETS
 
@@ -68,14 +68,21 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="BrowserMind",
     description="Autonomous AI agent for browsing, understanding, and reporting.",
-    version="0.6.0",
+    version=__version__,
     lifespan=lifespan,
 )
 
-# CORS（开发时前端可能独立运行在不同端口）
+# CORS — origins configurable via CORS_ORIGINS env var
+# Default "*" is for local development only.
+# For production, set CORS_ORIGINS to a comma-separated list of allowed origins.
+_cors_origins = (
+    ["*"]
+    if settings.cors_origins == "*"
+    else [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -128,7 +135,7 @@ class SettingsUpdate(BaseModel):
 @app.get("/api/health")
 async def health():
     browser_status = "ready" if browser_tool._page else "not_started"
-    return {"status": "ok", "version": "0.6.0", "browser": browser_status}
+    return {"status": "ok", "version": __version__, "browser": browser_status}
 
 
 @app.post("/api/agent/run")
@@ -398,7 +405,10 @@ async def delete_task(task_id: int):
 
 @app.post("/api/browser/{tool_name}")
 async def call_browser_tool(tool_name: str, req: ToolRequest):
-    """直接调用浏览器工具（用于测试）。"""
+    """直接调用浏览器工具（开发/调试用）。
+
+    注意：此端点无认证，生产部署时建议通过反向代理限制访问。
+    """
     result = await browser_tool.execute(tool_name, req.arguments)
     return result
 

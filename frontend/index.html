@@ -2278,7 +2278,9 @@ async function resetSettings() {
 // HTML sanitize helper (XSS protection)
 function safeHtml(markdownText) {
   const raw = marked.parse(markdownText || '');
-  return typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(raw) : raw;
+  if (typeof DOMPurify !== 'undefined') return DOMPurify.sanitize(raw);
+  // Fallback: strip all HTML tags if DOMPurify is unavailable
+  return raw.replace(/<[^>]*>/g, '');
 }
 
 // ══════════════════════════════════════════════
@@ -3724,13 +3726,13 @@ function App() {
         setChatMessages(prev => [...prev, { role: 'system', text: '追加指令已发送，Agent 正在处理...', time: now }]);
       } catch (e) {
         // WebSocket 发送失败（连接已断）→ 标记关闭，降级为全新任务
-        console.warn('[BrowserMind] WebSocket send failed, starting new task:', e.message);
+        // WebSocket send failed, starting new task
         wsClosedRef.current = true;
         handleRun(text);
       }
     } else {
       // WebSocket 已断开 → 启动全新任务
-      console.log('[BrowserMind] WebSocket not open (ws=%s, closed=%s), starting new task', ws ? ws.readyState : 'null', wsClosedRef.current);
+      // WebSocket not open, starting new task
       handleRun(text);
     }
   }, [handleRun]);

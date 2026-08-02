@@ -5,7 +5,13 @@ LLM provider settings - adjust based on your choice.
 优先级：代码默认值 < .env / 环境变量 < user_config.json（前端设置）
 """
 
+import logging
+
 from pydantic_settings import BaseSettings
+
+__version__ = "0.6.0"
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -35,8 +41,12 @@ class Settings(BaseSettings):
     browser_timeout: int = 30000  # milliseconds
 
     # --- Server Configuration ---
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 8000
+
+    # CORS allowed origins (comma-separated, e.g. "http://localhost:3000,https://example.com")
+    # Set to "*" to allow all origins (not recommended for production)
+    cors_origins: str = "*"
 
     model_config = {"env_file": ".env", "env_prefix": ""}
 
@@ -51,7 +61,7 @@ def _load_user_config():
             if hasattr(settings, key) and value is not None:
                 setattr(settings, key, value)
     except Exception:
-        pass
+        logger.debug("Failed to load user config, using defaults", exc_info=True)
 
 
 settings = Settings()
