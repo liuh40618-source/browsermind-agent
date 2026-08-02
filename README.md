@@ -1,6 +1,6 @@
 # BrowserMind
 
-[![CI](https://github.com/your-username/browsermind/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/browsermind/actions/workflows/ci.yml)
+[![CI](https://github.com/liuh40618-source/browsermind/actions/workflows/ci.yml/badge.svg)](https://github.com/liuh40618-source/browsermind/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
@@ -24,7 +24,7 @@ BrowserMind is an autonomous AI agent capable of planning tasks, controlling bro
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-username/browsermind.git
+git clone https://github.com/liuh40618-source/browsermind.git
 cd browsermind
 
 # 2. Create a virtual environment (recommended)
