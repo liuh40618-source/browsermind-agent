@@ -1,0 +1,26 @@
+# BrowserMind Dependencies
+# Install: pip install -r requirements.txt
+
+# LLM
+openai>=1.0.0
+
+# Web Server
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+websockets>=10.0
+python-multipart>=0.0.5
+
+# Configuration
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# Browser Automation
+playwright>=1.30.0
+
+# Web Parsing
+beautifulsoup4>=4.12.0
+readability-lxml>=0.8.0
+html2text>=2024.0.0
+
+# HTTP Client
+httpx>=0.25.0
