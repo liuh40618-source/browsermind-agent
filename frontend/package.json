@@ -1,0 +1,9 @@
+{
+  "name": "browsermind-frontend",
+  "version": "0.6.0",
+  "private": true,
+  "description": "BrowserMind frontend - static HTML",
+  "scripts": {
+    "build": "echo 'No build required - static HTML'"
+  }
+}

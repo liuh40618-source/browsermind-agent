@@ -32,6 +32,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        run: |
+          pip install --prefer-binary -r requirements-dev.txt
+          playwright install --with-deps chromium
       - name: Run tests
         run: pytest --tb=short -q
