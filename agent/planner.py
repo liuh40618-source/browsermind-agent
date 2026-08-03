@@ -20,7 +20,6 @@ Planner Agent - 把用户需求变成计划。
 import json
 from typing import Any
 
-
 PLANNER_PROMPT = """You are a task planner for BrowserMind, an autonomous AI agent.
 
 Given a user's task, break it down into a sequence of executable steps.

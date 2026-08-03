@@ -5,12 +5,14 @@ TaskStore 单元测试
 不依赖任何外部服务或真实数据。
 """
 
-import pytest
 from pathlib import Path
+
+import pytest
+
 from store import TaskStore
 
-
 # ── Fixture ──────────────────────────────────────────────
+
 
 @pytest.fixture
 def store(tmp_path: Path) -> TaskStore:
@@ -35,6 +37,7 @@ def _make_task(task: str = "搜索测试", status: str = "done") -> dict:
 
 # ── save_task ────────────────────────────────────────────
 
+
 class TestSaveTask:
     """save_task 相关测试。"""
 
@@ -52,6 +55,7 @@ class TestSaveTask:
 
 
 # ── get_task ─────────────────────────────────────────────
+
 
 class TestGetTask:
     """get_task 相关测试。"""
@@ -89,6 +93,7 @@ class TestGetTask:
 
 
 # ── list_tasks ───────────────────────────────────────────
+
 
 class TestListTasks:
     """list_tasks 分页与排序测试。"""
@@ -133,6 +138,7 @@ class TestListTasks:
 
 # ── count_tasks ──────────────────────────────────────────
 
+
 class TestCountTasks:
     """count_tasks 相关测试。"""
 
@@ -156,6 +162,7 @@ class TestCountTasks:
 
 # ── delete_task ──────────────────────────────────────────
 
+
 class TestDeleteTask:
     """delete_task 相关测试。"""
 
@@ -176,6 +183,7 @@ class TestDeleteTask:
 
 
 # ── clear_all_tasks ──────────────────────────────────────
+
 
 class TestClearAllTasks:
     """clear_all_tasks 相关测试。"""

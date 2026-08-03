@@ -22,9 +22,11 @@ Reflection Agent - 任务完成度评估 + 下一步决策器（闭环版）
 import json
 from typing import Any
 
-REFLECTION_PROMPT = """You are the Reflection module of BrowserMind, an autonomous AI agent.
+REFLECTION_PROMPT = """\
+You are the Reflection module of BrowserMind, an autonomous AI agent.
 
-Your job is to evaluate whether the agent has gathered enough information to complete the user's task, and if NOT, decide the NEXT CONCRETE ACTION.
+Your job is to evaluate whether the agent has gathered enough information
+to complete the user's task, and if NOT, decide the NEXT CONCRETE ACTION.
 
 Given:
 - The user's original task
@@ -33,10 +35,13 @@ Given:
 - Current task state (completed steps, missing info, next action)
 
 Decide:
-1. success: Has enough information been collected to genuinely answer the task? Be strict — only true if the gathered info truly answers the task.
+1. success: Has enough information been collected to genuinely answer
+   the task? Be strict - only true if the gathered info truly answers
+   the task.
 2. score: Completion score 0-100.
 3. reason: Why complete or incomplete, what's missing (in Chinese).
-4. missing: A list of specific missing pieces of information (in Chinese). Empty list if success.
+4. missing: A list of specific missing pieces of information (in
+   Chinese). Empty list if success.
 5. next_action: The NEXT machine-executable tool call. MUST be one of:
    - {"type": "search", "query": "..."}
    - {"type": "open_page", "url": "..."}
@@ -44,7 +49,8 @@ Decide:
    - {"type": "click", "text": "..."}
    - {"type": "scroll", "direction": "down"}
    - {"type": "type", "selector": "...", "value": "..."}
-   - {"type": "finish", "summary": "..."}   # when you determine the task is impossible or already complete
+   - {"type": "finish", "summary": "..."}
+     # when you determine the task is impossible or already complete
    Set next_action to null if success=true.
 
 Return ONLY a JSON object:
@@ -56,7 +62,8 @@ Return ONLY a JSON object:
     "next_action": {"type": "...", ...} or null
 }
 
-Be strict and honest: do not return success=true if key information is still missing."""
+Be strict and honest: do not return success=true if key information
+is still missing."""
 
 
 class Reflection:

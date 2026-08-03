@@ -8,6 +8,7 @@ Agent 不是简单的"输入→输出"，而是：
 """
 
 from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -21,7 +22,7 @@ class AgentState(BaseModel):
     plan: list[dict[str, Any]] = Field(default_factory=list)
 
     # 带状态的计划步骤（Planner 状态驱动用）
-    # 每个 step: {"name": str, "type": str, "goal": str, "status": "pending"|"running"|"done"|"skipped", ...}
+    # 每个 step: {name, type, goal, status: pending|running|done|skipped}
     plan_steps: list[dict[str, Any]] = Field(default_factory=list)
 
     # 当前执行的步骤索引（-1 表示未开始）
@@ -48,24 +49,29 @@ class AgentState(BaseModel):
     # 任务执行耗时（秒）
     duration_seconds: int = 0
 
-    # 任务状态（Reflection 闭环用）：goal / completed_steps / missing / next_action / score
+    # 任务状态（Reflection 闭环用）
+    # goal / completed_steps / missing / next_action / score
     task_state: dict[str, Any] = Field(default_factory=dict)
 
     def add_log(self, agent: str, action: str, detail: str = "") -> None:
         """添加一条执行日志。"""
-        from datetime import datetime  # noqa: deferred to avoid circular import at module level
-        self.logs.append({
-            "time": datetime.now().strftime("%H:%M:%S"),
-            "agent": agent,
-            "action": action,
-            "detail": detail,
-        })
+        from datetime import datetime  # noqa: E402
+
+        self.logs.append(
+            {
+                "time": datetime.now().strftime("%H:%M:%S"),
+                "agent": agent,
+                "action": action,
+                "detail": detail,
+            }
+        )
 
     # ── Planner 状态驱动方法 ──
 
     def init_plan_steps(self, steps: list[dict[str, Any]]) -> None:
         """用 Planner 输出的步骤初始化 plan_steps（深拷贝，避免引用污染）。"""
         import copy
+
         self.plan_steps = [copy.deepcopy(s) for s in steps]
         self.current_step_index = -1
 
@@ -121,7 +127,8 @@ class AgentState(BaseModel):
             return "无计划"
         lines = []
         for i, s in enumerate(self.plan_steps):
-            icon = {"done": "✓", "running": "▶", "pending": "○", "skipped": "✗"}.get(s.get("status", ""), "?")
+            _icons = {"done": "✓", "running": "▶", "pending": "○", "skipped": "✗"}
+            icon = _icons.get(s.get("status", ""), "?")
             lines.append(f"{icon} [{i+1}] {s.get('name', '?')}: {s.get('status', '?')}")
         done = sum(1 for s in self.plan_steps if s.get("status") == "done")
         total = len(self.plan_steps)

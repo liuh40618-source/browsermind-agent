@@ -17,10 +17,11 @@ Analyst Agent - 把碎片信息变成结构化报告。
 import json
 from typing import Any
 
+ANALYST_PROMPT = """\
+You are the Result Analyzer of BrowserMind, an autonomous AI agent.
 
-ANALYST_PROMPT = """You are the Result Analyzer of BrowserMind, an autonomous AI agent.
-
-Your job is to take all the fragmented information gathered by the agent and produce a well-structured Markdown report.
+Your job is to take all the fragmented information gathered by the
+agent and produce a well-structured Markdown report.
 
 Rules:
 1. Write the report in the SAME LANGUAGE as the user's original task.
@@ -87,7 +88,8 @@ class Analyst:
             context_parts.append(json.dumps(info, ensure_ascii=False, indent=2)[:3000])
 
         if visited_pages:
-            context_parts.append(f"\n## 访问的页面\n" + "\n".join(f"- {u}" for u in visited_pages))
+            _pages = "\n".join(f"- {u}" for u in visited_pages)
+            context_parts.append(f"\n## 访问的页面\n{_pages}")
 
         context = "\n".join(context_parts)
 

@@ -6,12 +6,14 @@ SettingsStore 单元测试
 """
 
 import json
-import pytest
 from pathlib import Path
+
+import pytest
+
 from settings_store import SettingsStore
 
-
 # ── Fixture ──────────────────────────────────────────────
+
 
 @pytest.fixture
 def settings(tmp_path: Path) -> SettingsStore:
@@ -37,6 +39,7 @@ def settings_with_data(tmp_path: Path) -> SettingsStore:
 
 # ── get / 基本操作 ───────────────────────────────────────
 
+
 class TestGet:
     """get 方法相关测试。"""
 
@@ -60,6 +63,7 @@ class TestGet:
 
 # ── get_all（过滤敏感 key）───────────────────────────────
 
+
 class TestGetAll:
     """get_all 方法相关测试。"""
 
@@ -69,7 +73,10 @@ class TestGetAll:
         assert "llm_api_key" not in result
         assert "tavily_api_key" not in result
 
-    def test_get_all_includes_non_sensitive_keys(self, settings_with_data: SettingsStore):
+    def test_get_all_includes_non_sensitive_keys(
+        self,
+        settings_with_data: SettingsStore,
+    ):
         """get_all 应包含非敏感 key。"""
         result = settings_with_data.get_all()
         assert result["llm_provider"] == "deepseek"
@@ -83,10 +90,14 @@ class TestGetAll:
 
 # ── get_all_with_key（包含所有 key）──────────────────────
 
+
 class TestGetAllWithKey:
     """get_all_with_key 方法相关测试。"""
 
-    def test_get_all_with_key_includes_sensitive_keys(self, settings_with_data: SettingsStore):
+    def test_get_all_with_key_includes_sensitive_keys(
+        self,
+        settings_with_data: SettingsStore,
+    ):
         """get_all_with_key 应包含敏感 key。"""
         result = settings_with_data.get_all_with_key()
         assert "llm_api_key" in result
@@ -102,6 +113,7 @@ class TestGetAllWithKey:
 
 
 # ── update ───────────────────────────────────────────────
+
 
 class TestUpdate:
     """update 方法相关测试。"""
@@ -124,10 +136,12 @@ class TestUpdate:
 
     def test_update_returns_non_sensitive_data(self, settings: SettingsStore):
         """update 应返回不含敏感 key 的字典。"""
-        settings.update({
-            "llm_provider": "openai",
-            "llm_api_key": "sk-new-key",
-        })
+        settings.update(
+            {
+                "llm_provider": "openai",
+                "llm_api_key": "sk-new-key",
+            }
+        )
         result = settings.update({"llm_model": "gpt-4o"})
         assert "llm_api_key" not in result
         assert "llm_model" in result
@@ -139,6 +153,7 @@ class TestUpdate:
 
 
 # ── reset ────────────────────────────────────────────────
+
 
 class TestReset:
     """reset 方法相关测试。"""
@@ -164,6 +179,7 @@ class TestReset:
 
 # ── 文件不存在时的行为 ───────────────────────────────────
 
+
 class TestFileNotExists:
     """配置文件不存在时的行为测试。"""
 
@@ -181,6 +197,7 @@ class TestFileNotExists:
 
 
 # ── 损坏的 JSON 文件 ────────────────────────────────────
+
 
 class TestCorruptedFile:
     """JSON 文件损坏时的容错测试。"""

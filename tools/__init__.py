@@ -5,7 +5,15 @@ BrowserMind Tools - 工具名常量集中定义
 """
 
 # 浏览器控制类工具
-BROWSER_TOOLS = {"open_page", "open", "click", "type", "scroll", "screenshot", "get_text"}
+BROWSER_TOOLS = {
+    "open_page",
+    "open",
+    "click",
+    "type",
+    "scroll",
+    "screenshot",
+    "get_text",
+}
 
 # 搜索类工具
 SEARCH_TOOLS = {"search"}

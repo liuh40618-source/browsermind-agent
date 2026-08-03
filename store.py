@@ -12,12 +12,11 @@ Task Store - 任务历史存储
 - 时间戳
 """
 
-import sqlite3
 import json
-from pathlib import Path
+import sqlite3
 from datetime import datetime
+from pathlib import Path
 from typing import Any
-
 
 DB_PATH = Path(__file__).resolve().parent / "data" / "tasks.db"
 
@@ -54,7 +53,10 @@ class TaskStore:
             try:
                 conn.execute("SELECT duration_seconds FROM tasks LIMIT 1")
             except sqlite3.OperationalError:
-                conn.execute("ALTER TABLE tasks ADD COLUMN duration_seconds INTEGER DEFAULT 0")
+                conn.execute(
+                    "ALTER TABLE tasks ADD COLUMN"
+                    " duration_seconds INTEGER DEFAULT 0",
+                )
             conn.commit()
 
     def save_task(
@@ -73,7 +75,10 @@ class TaskStore:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
                 """
-                INSERT INTO tasks (task, status, plan, visited_pages, extracted_info, final_report, logs, created_at, completed_at, duration_seconds)
+                INSERT INTO tasks
+                (task, status, plan, visited_pages, extracted_info,
+                 final_report, logs, created_at, completed_at,
+                 duration_seconds)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
@@ -96,7 +101,10 @@ class TaskStore:
         """获取单个任务详情。"""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM tasks WHERE id = ?",
+                (task_id,),
+            ).fetchone()
             if not row:
                 return None
             return self._row_to_dict(row)

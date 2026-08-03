@@ -10,7 +10,9 @@ Browser Tool - 浏览器控制封装层
 """
 
 from typing import Any
-from playwright.async_api import async_playwright, Browser, Page
+
+from playwright.async_api import Browser, Page, async_playwright
+
 from config import settings
 
 
@@ -124,7 +126,9 @@ class BrowserTool:
                 return {
                     "tool": "click",
                     "status": "ambiguous",
-                    "message": f"Found {count} elements matching '{text}', please specify",
+                    "message": (
+                        f"Found {count} elements matching '{text}'," " please specify"
+                    ),
                     "data": {"text": text, "candidates": texts},
                 }
 
@@ -218,6 +222,7 @@ class BrowserTool:
         try:
             screenshot_bytes = await page.screenshot(full_page=False)
             import base64
+
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
             return {
                 "tool": "screenshot",
@@ -243,6 +248,7 @@ class BrowserTool:
 
             # 用 Parser 解析，返回结构化内容（一次解析，两处复用）
             from tools.parser import Parser
+
             parser = Parser()
             parsed = parser.parse(html, url)
 
@@ -255,7 +261,10 @@ class BrowserTool:
             return {
                 "tool": "get_text",
                 "status": "success",
-                "message": f"Retrieved page text ({len(clean_text)} chars, cleaned from {parsed['stats']['original_chars']} chars)",
+                "message": (
+                    f"Retrieved page text ({len(clean_text)} chars,"
+                    f" cleaned from {parsed['stats']['original_chars']} chars)"
+                ),
                 "data": {
                     "title": parsed["title"] or title,
                     "text": clean_text,
@@ -298,7 +307,9 @@ class BrowserTool:
             return {
                 "tool": tool,
                 "status": "failed",
-                "message": f"Unknown tool: '{tool}'. Available: {list(dispatch.keys())}",
+                "message": (
+                    f"Unknown tool: '{tool}'." f" Available: {list(dispatch.keys())}"
+                ),
                 "data": {},
             }
 

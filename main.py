@@ -10,9 +10,8 @@ BrowserMind - FastAPI 主入口
 - /static：前端静态资源
 """
 
-import os
-import json
 import asyncio
+import json
 import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -24,22 +23,22 @@ from typing import Any
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from tools.browser import BrowserTool
+from agent.agent_loop import AgentLoop
+from agent.analyst import Analyst
 from agent.llm import LLMClient
 from agent.planner import Planner
 from agent.reflection import Reflection
-from agent.analyst import Analyst
-from agent.agent_loop import AgentLoop
-from config import settings, __version__
+from agent.state import AgentState
+from config import __version__, settings
+from settings_store import PRESETS, settings_store
 from store import store
-from settings_store import settings_store, PRESETS
-
+from tools.browser import BrowserTool
 
 # ── 路径 ────────────────────────────────────────────────
 
@@ -57,6 +56,7 @@ analyst = Analyst(llm_client)
 
 
 # ── 生命周期 ────────────────────────────────────────────
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -114,6 +114,7 @@ async def serve_frontend():
 
 # ── 请求模型 ──
 
+
 class TaskRequest(BaseModel):
     task: str
 
@@ -131,6 +132,7 @@ class SettingsUpdate(BaseModel):
 
 
 # ── API 端点 ────────────────────────────────────────────
+
 
 @app.get("/api/health")
 async def health():
@@ -160,6 +162,7 @@ async def agent_run(req: TaskRequest):
 
 
 # ── WebSocket 辅助函数 ──────────────────────────────────
+
 
 def _classify_ws_message(log: dict) -> tuple[str, Any]:
     """将日志分类为 WebSocket 消息类型，返回 (type, data)。"""
@@ -231,19 +234,21 @@ async def _message_listener(
 
 async def _send_done(ws: WebSocket, state_obj, task_id: int):
     """推送 done 消息到前端。"""
-    await ws.send_json({
-        "type": "done",
-        "data": {
-            "id": task_id,
-            "task": state_obj.task,
-            "status": state_obj.status,
-            "plan": state_obj.plan,
-            "extracted_info": state_obj.extracted_info,
-            "final_report": state_obj.final_report,
-            "visited_pages": state_obj.visited_pages,
-            "duration_seconds": state_obj.duration_seconds,
-        },
-    })
+    await ws.send_json(
+        {
+            "type": "done",
+            "data": {
+                "id": task_id,
+                "task": state_obj.task,
+                "status": state_obj.status,
+                "plan": state_obj.plan,
+                "extracted_info": state_obj.extracted_info,
+                "final_report": state_obj.final_report,
+                "visited_pages": state_obj.visited_pages,
+                "duration_seconds": state_obj.duration_seconds,
+            },
+        }
+    )
 
 
 async def _run_agent_round(
@@ -259,18 +264,23 @@ async def _run_agent_round(
     loop.on_log(lambda log: log_queue.put_nowait(log))
 
     def on_decision(evaluation: dict):
-        log_queue.put_nowait({
-            "time": datetime.now().strftime("%H:%M:%S"),
-            "agent": "System",
-            "action": "等待用户决策",
-            "detail": json.dumps({
-                "score": evaluation.get("score", 0),
-                "reason": evaluation.get("reason", ""),
-                "missing": evaluation.get("missing", []),
-                "next_action": evaluation.get("next_action"),
-                "success": evaluation.get("success", False),
-            }, ensure_ascii=False),
-        })
+        log_queue.put_nowait(
+            {
+                "time": datetime.now().strftime("%H:%M:%S"),
+                "agent": "System",
+                "action": "等待用户决策",
+                "detail": json.dumps(
+                    {
+                        "score": evaluation.get("score", 0),
+                        "reason": evaluation.get("reason", ""),
+                        "missing": evaluation.get("missing", []),
+                        "next_action": evaluation.get("next_action"),
+                        "success": evaluation.get("success", False),
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+        )
 
     loop.on_decision(decision_queue, on_decision)
     loop.set_instruction_queue(instruction_queue)
@@ -296,7 +306,12 @@ async def agent_stream(ws: WebSocket):
         try:
             data = await asyncio.wait_for(ws.receive_json(), timeout=30)
         except asyncio.TimeoutError:
-            await ws.send_json({"type": "error", "message": "Connection timeout: no task received"})
+            await ws.send_json(
+                {
+                    "type": "error",
+                    "message": "Connection timeout: no task received",
+                }
+            )
             return
         task = data.get("task", "")
         if not task:
@@ -314,24 +329,43 @@ async def agent_stream(ws: WebSocket):
         )
 
         # 第一轮：执行初始任务
-        state = await _run_agent_round(ws, task, log_queue, decision_queue, instruction_queue)
+        state = await _run_agent_round(
+            ws,
+            task,
+            log_queue,
+            decision_queue,
+            instruction_queue,
+        )
 
         # 后续轮次：等待追加指令（多轮对话，10 分钟超时）
         prev_state = state
         while not disconnected.is_set():
             try:
-                instruction = await asyncio.wait_for(instruction_queue.get(), timeout=600)
+                instruction = await asyncio.wait_for(
+                    instruction_queue.get(),
+                    timeout=600,
+                )
             except asyncio.TimeoutError:
                 break
             if disconnected.is_set():
                 break
 
+            prev_report = (
+                prev_state.final_report[:500] if prev_state.final_report else "无"
+            )
             follow_up_task = (
                 f"原始任务：{task}\n\n"
-                f"前序报告摘要：{prev_state.final_report[:500] if prev_state.final_report else '无'}\n\n"
+                f"前序报告摘要：{prev_report}\n\n"
                 f"追加要求：{instruction}"
             )
-            state = await _run_agent_round(ws, follow_up_task, log_queue, decision_queue, instruction_queue, prev_state)
+            state = await _run_agent_round(
+                ws,
+                follow_up_task,
+                log_queue,
+                decision_queue,
+                instruction_queue,
+                prev_state,
+            )
             prev_state = state
 
     except WebSocketDisconnect:
@@ -361,6 +395,7 @@ async def agent_stream(ws: WebSocket):
 
 
 # ── 任务历史 API ────────────────────────────────────────
+
 
 @app.get("/api/tasks")
 async def list_tasks(
@@ -415,6 +450,7 @@ async def call_browser_tool(tool_name: str, req: ToolRequest):
 
 # ── 设置 API ────────────────────────────────────────────
 
+
 @app.get("/api/settings")
 async def get_settings():
     """获取当前配置（不含 API Key）。"""
@@ -424,7 +460,9 @@ async def get_settings():
         "llm_model": user_cfg.get("llm_model", settings.llm_model),
         "llm_base_url": user_cfg.get("llm_base_url", settings.llm_base_url),
         "has_api_key": bool(settings_store.get("llm_api_key", settings.llm_api_key)),
-        "has_tavily_key": bool(settings_store.get("tavily_api_key", settings.tavily_api_key)),
+        "has_tavily_key": bool(
+            settings_store.get("tavily_api_key", settings.tavily_api_key),
+        ),
     }
 
 
@@ -462,8 +500,16 @@ async def reset_settings():
 
     # 重新从 .env 加载 defaults
     from config import Settings
+
     defaults = Settings()
-    for field in ["llm_provider", "llm_model", "llm_api_key", "llm_base_url", "tavily_api_key"]:
+    _fields = [
+        "llm_provider",
+        "llm_model",
+        "llm_api_key",
+        "llm_base_url",
+        "tavily_api_key",
+    ]
+    for field in _fields:
         setattr(settings, field, getattr(defaults, field))
 
     llm_client.reload()
@@ -474,4 +520,5 @@ async def reset_settings():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("main:app", host=settings.host, port=settings.port, reload=False)

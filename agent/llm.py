@@ -7,9 +7,10 @@ LLM 调用层
 
 import json
 from typing import Any
-from openai import AsyncOpenAI
-from config import settings
 
+from openai import AsyncOpenAI
+
+from config import settings
 
 # ── 浏览器工具描述 ──────────────────────────────────────
 
@@ -41,7 +42,10 @@ BROWSER_TOOLS_SCHEMA = [
                 "properties": {
                     "text": {
                         "type": "string",
-                        "description": "The visible text of the element to click, e.g. 'Pricing'",
+                        "description": (
+                            "The visible text of the element to click,"
+                            " e.g. 'Pricing'"
+                        ),
                     }
                 },
                 "required": ["text"],
@@ -58,7 +62,10 @@ BROWSER_TOOLS_SCHEMA = [
                 "properties": {
                     "selector": {
                         "type": "string",
-                        "description": "Placeholder text, label, or CSS selector of the input field",
+                        "description": (
+                            "Placeholder text, label, or CSS selector"
+                            " of the input field"
+                        ),
                     },
                     "value": {
                         "type": "string",
@@ -110,7 +117,9 @@ BROWSER_TOOLS_SCHEMA = [
         "type": "function",
         "function": {
             "name": "search",
-            "description": "Search the web for information. Returns titles, URLs, and snippets.",
+            "description": (
+                "Search the web for information." " Returns titles, URLs, and snippets."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -127,13 +136,23 @@ BROWSER_TOOLS_SCHEMA = [
         "type": "function",
         "function": {
             "name": "finish",
-            "description": "Call this when you have gathered enough information and want to finish with a summary. Also call this if you determine the task is impossible to complete after reasonable attempts — explain why in the summary.",
+            "description": (
+                "Call this when you have gathered enough information"
+                " and want to finish with a summary. Also call this"
+                " if you determine the task is impossible to complete"
+                " after reasonable attempts - explain why in the"
+                " summary."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "summary": {
                         "type": "string",
-                        "description": "A summary of all information gathered, or an explanation of why the task cannot be completed",
+                        "description": (
+                            "A summary of all information gathered,"
+                            " or an explanation of why the task"
+                            " cannot be completed"
+                        ),
                     }
                 },
                 "required": ["summary"],
@@ -142,9 +161,11 @@ BROWSER_TOOLS_SCHEMA = [
     },
 ]
 
-SYSTEM_PROMPT = """You are BrowserMind, an autonomous AI agent that controls a web browser to accomplish tasks.
+SYSTEM_PROMPT = """\
+You are BrowserMind, an autonomous AI agent that controls a web browser
+to accomplish tasks.
 
-You work in a loop: think → act → observe → think again.
+You work in a loop: think -> act -> observe -> think again.
 
 Available tools:
 - search(query): Search the web for information
@@ -160,9 +181,13 @@ Rules:
 1. Always think first, then call exactly ONE tool.
 2. After each tool result, decide the next action based on what you observed.
 3. Be efficient: don't visit the same page twice, don't repeat searches.
-4. When you have enough information to answer the task, call finish() with a summary.
+4. When you have enough information to answer the task, call finish()
+   with a summary.
 5. If a tool fails, try an alternative approach.
-6. If after several attempts you determine the task is impossible (information doesn't exist, requires login, paywall, or the sources are unreachable), call finish() and honestly explain WHY the task cannot be completed. Do NOT keep looping indefinitely."""
+6. If after several attempts you determine the task is impossible
+   (information doesn't exist, requires login, paywall, or the sources
+   are unreachable), call finish() and honestly explain WHY the task
+   cannot be completed. Do NOT keep looping indefinitely."""
 
 
 class LLMClient:
@@ -180,7 +205,9 @@ class LLMClient:
         api_key = settings.llm_api_key
         if not api_key or api_key in ("your-api-key-here", ""):
             raise ValueError(
-                "LLM API Key 未配置。请在前端设置页面配置 API Key，或在 .env 中设置 LLM_API_KEY。"
+                "LLM API Key 未配置。"
+                "请在前端设置页面配置 API Key，"
+                "或在 .env 中设置 LLM_API_KEY。"
             )
         self._client = AsyncOpenAI(
             api_key=api_key,
@@ -254,7 +281,10 @@ class LLMClient:
         messages: list[dict[str, str]],
         response_format: dict[str, str] | None = None,
     ) -> str:
-        """通用 chat completion 调用（供 Planner / Reflection / Analyst / extract_info 共享）。"""
+        """通用 chat completion 调用。
+
+        供 Planner / Reflection / Analyst / extract_info 共享。
+        """
         kwargs: dict[str, Any] = {"model": self._model, "messages": messages}
         if response_format:
             kwargs["response_format"] = response_format
@@ -265,8 +295,12 @@ class LLMClient:
         self, task: str, raw_text: str, fields: list[str] | None = None
     ) -> dict[str, Any]:
         """从网页文本中提取结构化信息（复用 chat() 方法）。"""
-        fields_hint = f"重点提取以下字段：{', '.join(fields)}" if fields else "提取与任务相关的关键信息"
-        extract_prompt = f"""你是一个信息提取器。从网页文本中提取与任务相关的结构化信息。
+        if fields:
+            fields_hint = f"重点提取以下字段：{', '.join(fields)}"
+        else:
+            fields_hint = "提取与任务相关的关键信息"
+        extract_prompt = f"""\
+你是一个信息提取器。从网页文本中提取与任务相关的结构化信息。
 
 任务：{task}
 {fields_hint}

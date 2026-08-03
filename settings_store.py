@@ -9,7 +9,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 CONFIG_PATH = Path(__file__).resolve().parent / "data" / "user_config.json"
 
 # 预设供应商配置模板

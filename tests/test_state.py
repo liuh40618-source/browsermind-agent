@@ -5,11 +5,10 @@ AgentState 单元测试
 不依赖任何外部服务。
 """
 
-import pytest
 from agent.state import AgentState
 
-
 # ── 初始状态 ─────────────────────────────────────────────
+
 
 class TestAgentStateDefaults:
     """AgentState 默认初始值测试。"""
@@ -77,6 +76,7 @@ class TestAgentStateDefaults:
 
 # ── to_store_dict ────────────────────────────────────────
 
+
 class TestToStoreDict:
     """to_store_dict 方法测试。"""
 
@@ -85,8 +85,14 @@ class TestToStoreDict:
         state = AgentState()
         d = state.to_store_dict()
         expected_keys = {
-            "task", "status", "plan", "visited_pages",
-            "extracted_info", "final_report", "logs", "duration_seconds",
+            "task",
+            "status",
+            "plan",
+            "visited_pages",
+            "extracted_info",
+            "final_report",
+            "logs",
+            "duration_seconds",
         }
         assert set(d.keys()) == expected_keys
 
@@ -128,6 +134,7 @@ class TestToStoreDict:
 
 # ── add_log ──────────────────────────────────────────────
 
+
 class TestAddLog:
     """add_log 方法测试。"""
 
@@ -152,6 +159,7 @@ class TestAddLog:
 
 
 # ── plan_steps 状态管理 ──────────────────────────────────
+
 
 class TestPlanSteps:
     """plan_steps 相关方法测试。"""
@@ -178,10 +186,12 @@ class TestPlanSteps:
     def test_start_step(self):
         """start_step 应将指定步骤标记为 running。"""
         state = AgentState()
-        state.init_plan_steps([
-            {"name": "step1", "status": "pending"},
-            {"name": "step2", "status": "pending"},
-        ])
+        state.init_plan_steps(
+            [
+                {"name": "step1", "status": "pending"},
+                {"name": "step2", "status": "pending"},
+            ]
+        )
         result = state.start_step(0)
         assert result is not None
         assert result["status"] == "running"
@@ -211,11 +221,13 @@ class TestPlanSteps:
     def test_get_next_pending_step(self):
         """get_next_pending_step 应返回下一个 pending 步骤。"""
         state = AgentState()
-        state.init_plan_steps([
-            {"name": "step1", "status": "done"},
-            {"name": "step2", "status": "pending"},
-            {"name": "step3", "status": "pending"},
-        ])
+        state.init_plan_steps(
+            [
+                {"name": "step1", "status": "done"},
+                {"name": "step2", "status": "pending"},
+                {"name": "step3", "status": "pending"},
+            ]
+        )
         result = state.get_next_pending_step()
         assert result is not None
         idx, step = result
@@ -225,14 +237,17 @@ class TestPlanSteps:
     def test_get_next_pending_step_none(self):
         """没有 pending 步骤时应返回 None。"""
         state = AgentState()
-        state.init_plan_steps([
-            {"name": "step1", "status": "done"},
-            {"name": "step2", "status": "done"},
-        ])
+        state.init_plan_steps(
+            [
+                {"name": "step1", "status": "done"},
+                {"name": "step2", "status": "done"},
+            ]
+        )
         assert state.get_next_pending_step() is None
 
 
 # ── get_plan_summary ─────────────────────────────────────
+
 
 class TestGetPlanSummary:
     """get_plan_summary 方法测试。"""
@@ -245,10 +260,12 @@ class TestGetPlanSummary:
     def test_plan_summary_contains_step_names(self):
         """计划摘要应包含步骤名称。"""
         state = AgentState()
-        state.init_plan_steps([
-            {"name": "搜索信息", "status": "done"},
-            {"name": "分析数据", "status": "pending"},
-        ])
+        state.init_plan_steps(
+            [
+                {"name": "搜索信息", "status": "done"},
+                {"name": "分析数据", "status": "pending"},
+            ]
+        )
         summary = state.get_plan_summary()
         assert "搜索信息" in summary
         assert "分析数据" in summary

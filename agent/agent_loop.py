@@ -20,19 +20,19 @@ Agent Loop - 核心执行引擎（Reflection 闭环版）
 其 next_action 会回灌到执行循环，真正形成 执行→反思→调整→再执行 的闭环。
 """
 
-import json
 import asyncio
+import json
 from datetime import datetime
 from typing import Any, Callable
 
-from agent.state import AgentState
+from agent.analyst import Analyst
 from agent.llm import LLMClient
 from agent.planner import Planner
 from agent.reflection import Reflection
-from agent.analyst import Analyst
+from agent.state import AgentState
+from tools import BROWSER_TOOLS, SEARCH_TOOLS
 from tools.browser import BrowserTool
 from tools.search import SearchTool
-from tools import BROWSER_TOOLS, SEARCH_TOOLS
 
 # 最大循环次数（防止无限循环）—— 总执行步数硬上限
 MAX_ITERATIONS = 15
@@ -72,9 +72,9 @@ class AgentLoop:
         # 用户追加指令队列（多轮对话）
         self._instruction_queue: asyncio.Queue[str] | None = None
         # 闭环反思状态
-        self._reflection_failures = 0      # 连续"未完成"次数
-        self._last_reflect_iteration = 0   # 上次反思的轮次
-        self._reflection_count = 0         # 总反思次数
+        self._reflection_failures = 0  # 连续"未完成"次数
+        self._last_reflect_iteration = 0  # 上次反思的轮次
+        self._reflection_count = 0  # 总反思次数
 
     def on_log(self, callback: Callable[[dict], Any]):
         """注册日志回调（供前端 WebSocket 实时展示）。"""
@@ -98,7 +98,9 @@ class AgentLoop:
 
     def has_pending_instructions(self) -> bool:
         """检查是否有待处理的追加指令。"""
-        return self._instruction_queue is not None and not self._instruction_queue.empty()
+        return (
+            self._instruction_queue is not None and not self._instruction_queue.empty()
+        )
 
     def set_previous_state(self, state: "AgentState"):
         """继承上一轮任务的状态（用于追加提问场景）。
@@ -168,7 +170,11 @@ class AgentLoop:
                 # 发送完整计划（前端据此实时渲染计划列表）
                 self._emit_log("Planner", "plan", json.dumps(plan, ensure_ascii=False))
                 # 发送带状态的 plan_steps（前端据此渲染状态指示器）
-                self._emit_log("Planner", "plan_steps", json.dumps(self.state.plan_steps, ensure_ascii=False))
+                self._emit_log(
+                    "Planner",
+                    "plan_steps",
+                    json.dumps(self.state.plan_steps, ensure_ascii=False),
+                )
                 for i, step in enumerate(plan):
                     self._emit_log(
                         "Planner",
@@ -190,22 +196,30 @@ class AgentLoop:
             if self.state.extracted_info:
                 prev_context += f"已收集 {len(self.state.extracted_info)} 条信息\n"
             prev_context += "请基于以上已有信息继续工作，避免重复操作。\n"
-            conversation_history.append({
-                "role": "user",
-                "content": prev_context,
-            })
+            conversation_history.append(
+                {
+                    "role": "user",
+                    "content": prev_context,
+                }
+            )
 
         # 如果有计划，把计划状态摘要告诉 LLM（而非完整历史）
         if self.state.plan_steps:
             plan_summary = self.state.get_plan_summary()
-            conversation_history.append({
-                "role": "user",
-                "content": (
-                    f"Here is the task plan with current status:\n{plan_summary}\n\n"
-                    f"Execute the next pending step. After completing a step, its status will be updated.\n"
-                    f"Focus on the current running step or start the next pending one."
-                ),
-            })
+            conversation_history.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"Here is the task plan with current status:\n"
+                        f"{plan_summary}\n\n"
+                        f"Execute the next pending step."
+                        f" After completing a step, its status"
+                        f" will be updated.\n"
+                        f"Focus on the current running step"
+                        f" or start the next pending one."
+                    ),
+                }
+            )
 
         for iteration in range(1, MAX_ITERATIONS + 1):
             self._emit_log("Agent", f"第 {iteration} 轮思考...")
@@ -218,10 +232,15 @@ class AgentLoop:
                     instructions.append(instr)
                 combined = "\n".join(instructions)
                 self._emit_log("User", "收到追加指令", combined[:200])
-                conversation_history.append({
-                    "role": "user",
-                    "content": f"[用户追加指令] {combined}\n请根据以上追加指令调整你的执行计划。",
-                })
+                conversation_history.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            f"[用户追加指令] {combined}\n"
+                            "请根据以上追加指令调整你的执行计划。"
+                        ),
+                    }
+                )
 
             # 1. LLM 决策（使用压缩后的上下文）
             try:
@@ -242,10 +261,15 @@ class AgentLoop:
             if decision.get("done"):
                 agent_summary = decision.get("answer", "")
                 info_count = self._count_effective_info()
-                self._emit_log("Agent", "任务完成", f"AI 认为已收集足够信息（{info_count} 条有效信息）")
+                self._emit_log(
+                    "Agent",
+                    "任务完成",
+                    f"AI 认为已收集足够信息（{info_count} 条有效信息）",
+                )
                 # 有信息 → 正常完成；没信息 → 用 LLM 的摘要作为报告
                 await self._produce_report(
-                    task, agent_summary,
+                    task,
+                    agent_summary,
                     status="done" if info_count > 0 else "partial",
                     wrap_partial=(info_count == 0),
                     info_count=info_count,
@@ -259,29 +283,39 @@ class AgentLoop:
                 self._emit_log("Agent", "LLM 返回无效决策", "缺少 tool 字段，跳过本轮")
                 continue
 
-            self._emit_log("Agent", f"调用工具: {tool}", json.dumps(arguments, ensure_ascii=False)[:200])
+            _args_str = json.dumps(arguments, ensure_ascii=False)[:200]
+            self._emit_log("Agent", f"调用工具: {tool}", _args_str)
 
             # ─ Planner 状态驱动：匹配 plan step 并标记为 running ──
             matched_step_idx = self._match_step_to_tool(tool, arguments)
             if matched_step_idx is not None:
                 step = self.state.start_step(matched_step_idx)
                 if step:
-                    self._emit_log("Planner", f"开始: {step.get('name', '?')}", f"[{matched_step_idx+1}] {step.get('goal', '')}")
+                    _goal = step.get("goal", "")
+                    self._emit_log(
+                        "Planner",
+                        f"开始: {step.get('name', '?')}",
+                        f"[{matched_step_idx+1}] {_goal}",
+                    )
                     self._emit_plan_steps()
 
             # 记录 LLM 的工具调用到对话历史
-            conversation_history.append({
-                "role": "assistant",
-                "content": thought,
-                "tool_calls": [{
-                    "id": f"call_{iteration}",
-                    "type": "function",
-                    "function": {
-                        "name": tool,
-                        "arguments": json.dumps(arguments, ensure_ascii=False),
-                    },
-                }],
-            })
+            conversation_history.append(
+                {
+                    "role": "assistant",
+                    "content": thought,
+                    "tool_calls": [
+                        {
+                            "id": f"call_{iteration}",
+                            "type": "function",
+                            "function": {
+                                "name": tool,
+                                "arguments": json.dumps(arguments, ensure_ascii=False),
+                            },
+                        }
+                    ],
+                }
+            )
 
             # 执行
             if tool in BROWSER_TOOLS:
@@ -307,22 +341,29 @@ class AgentLoop:
             if matched_step_idx is not None and result["status"] == "success":
                 step = self.state.complete_step(matched_step_idx)
                 if step:
-                    self._emit_log("Planner", f"完成: {step.get('name', '?')}", f"[{matched_step_idx+1}] ✓")
+                    self._emit_log(
+                        "Planner",
+                        f"完成: {step.get('name', '?')}",
+                        f"[{matched_step_idx+1}] ✓",
+                    )
                     self._emit_plan_steps()
 
             # 把结果加入对话历史（作为 tool 响应）
             observation = self._format_observation(result)
-            conversation_history.append({
-                "role": "tool",
-                "tool_call_id": f"call_{iteration}",
-                "content": observation,
-            })
+            conversation_history.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": f"call_{iteration}",
+                    "content": observation,
+                }
+            )
 
             # 5. 如果是 get_text，自动提取信息存入 State
             new_info_extracted = False
             if tool == "get_text" and result["status"] == "success":
                 page_data = result["data"]
-                self._emit_log("Parser", "提取信息", f"页面: {page_data.get('title', '')}")
+                _title = page_data.get("title", "")
+                self._emit_log("Parser", "提取信息", f"页面: {_title}")
 
                 try:
                     extracted = await self.llm.extract_info(
@@ -332,7 +373,8 @@ class AgentLoop:
                     extracted["_source_title"] = page_data.get("title", "")
                     self.state.extracted_info.append(extracted)
                     new_info_extracted = True
-                    self._emit_log("Parser", "提取完成", json.dumps(extracted, ensure_ascii=False)[:200])
+                    _ext_str = json.dumps(extracted, ensure_ascii=False)[:200]
+                    self._emit_log("Parser", "提取完成", _ext_str)
                 except Exception as e:
                     self._emit_log("Parser", "提取失败", str(e))
 
@@ -345,11 +387,13 @@ class AgentLoop:
             # 7. 搜索结果也存入提取信息
             if tool == "search" and result["status"] == "success":
                 search_results = result["data"].get("results", [])
-                self.state.extracted_info.append({
-                    "_type": "search_results",
-                    "_query": arguments.get("query", ""),
-                    "results": search_results,
-                })
+                self.state.extracted_info.append(
+                    {
+                        "_type": "search_results",
+                        "_query": arguments.get("query", ""),
+                        "results": search_results,
+                    }
+                )
 
             # 8. ── Reflection 闭环：执行 → 反思 → 调整 → 再执行 ──
             #    有新有效信息时立即反思；否则每隔 REFLECT_INTERVAL 轮兜底反思一次。
@@ -365,14 +409,26 @@ class AgentLoop:
             if effective_info == 0:
                 # 完全没收集到有效信息 → failed
                 self.state.status = "failed"
-                self._emit_log("Agent", f"达到最大轮次 ({MAX_ITERATIONS})，未收集到有效信息")
+                self._emit_log(
+                    "Agent",
+                    f"达到最大轮次 ({MAX_ITERATIONS})，未收集到有效信息",
+                )
                 self.state.final_report = self._generate_failure_report(
-                    task, reason="Agent 在多次尝试后未能获取到与任务相关的有效信息。可能原因：搜索关键词不匹配、目标页面无法访问、或所需信息需要登录/付费等权限。"
+                    task,
+                    reason=(
+                        "Agent 在多次尝试后未能获取到与任务相关的有效信息。"
+                        "可能原因：搜索关键词不匹配、目标页面无法访问、"
+                        "或所需信息需要登录/付费等权限。"
+                    ),
                 )
             else:
                 # 只要有信息就正常出报告（不额外打"部分完成"标签）
                 self.state.status = "done"
-                self._emit_log("Agent", f"达到最大轮次 ({MAX_ITERATIONS})，基于已有信息生成报告（{effective_info} 条有效信息）")
+                self._emit_log(
+                    "Agent",
+                    f"达到最大轮次 ({MAX_ITERATIONS})，"
+                    f"基于已有信息生成报告（{effective_info} 条有效信息）",
+                )
                 await self._produce_report(
                     task,
                     "Agent 达到最大轮次，以下是基于已收集信息的报告。",
@@ -405,7 +461,12 @@ class AgentLoop:
         # 计算任务耗时
         elapsed = (datetime.now() - start_time).total_seconds()
         self.state.duration_seconds = int(elapsed)
-        self._emit_log("System", "任务结束", f"状态: {self.state.status} · 耗时: {self.state.duration_seconds}s · 反思 {self._reflection_count} 次")
+        _summary = (
+            f"状态: {self.state.status} · "
+            f"耗时: {self.state.duration_seconds}s · "
+            f"反思 {self._reflection_count} 次"
+        )
+        self._emit_log("System", "任务结束", _summary)
         return self.state
 
     # ── 上下文压缩辅助方法 ────────────────────────────────
@@ -437,13 +498,15 @@ class AgentLoop:
         # 3. 追加当前计划状态摘要（让 LLM 知道全局进度）
         if self.state.plan_steps:
             plan_summary = self.state.get_plan_summary()
-            compressed.append({
-                "role": "user",
-                "content": (
-                    f"[当前计划状态]\n{plan_summary}\n"
-                    f"请基于以上状态决定下一步操作。"
-                ),
-            })
+            compressed.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"[当前计划状态]\n{plan_summary}\n"
+                        f"请基于以上状态决定下一步操作。"
+                    ),
+                }
+            )
 
         return compressed
 
@@ -534,7 +597,9 @@ class AgentLoop:
             effective = self._count_effective_info()
             await self._produce_report(
                 task,
-                f"用户决定结束任务。当前完成度 {evaluation.get('score', 0)}%，以下是基于已收集信息的报告。",
+                f"用户决定结束任务。当前完成度"
+                f" {evaluation.get('score', 0)}%，"
+                f"以下是基于已收集信息的报告。",
                 status="done" if effective > 0 else "failed",
                 wrap_partial=(effective == 0),
                 info_count=effective,
@@ -579,7 +644,8 @@ class AgentLoop:
             self._emit_log(
                 "Reflection",
                 "停止反思",
-                f"连续 {MAX_REFLECTION_FAILURES} 次未完成（{missing_desc}），基于已有信息出报告",
+                f"连续 {MAX_REFLECTION_FAILURES} 次未完成"
+                f"（{missing_desc}），基于已有信息出报告",
             )
             effective = self._count_effective_info()
             await self._produce_report(
@@ -627,7 +693,9 @@ class AgentLoop:
             "score": score,
             "reason": reason,
             "missing": missing,
-            "next_action": Reflection.format_next_action(next_action) if next_action else None,
+            "next_action": (
+                Reflection.format_next_action(next_action) if next_action else None
+            ),
             "success": evaluation.get("success", False),
         }
         self._emit_log(
@@ -661,7 +729,9 @@ class AgentLoop:
         elif t == "scroll":
             lines.append(f"请立即向 {next_action.get('direction', 'down')} 滚动页面。")
         elif t == "type":
-            lines.append(f'请在 "{next_action.get("selector", "")}" 输入 "{next_action.get("value", "")}"。')
+            _sel = next_action.get("selector", "")
+            _val = next_action.get("value", "")
+            lines.append(f'请在 "{_sel}" 输入 "{_val}"。')
         elif t == "finish":
             lines.append(f"请结束任务：{next_action.get('summary', '')}")
 
@@ -733,7 +803,9 @@ class AgentLoop:
             # get_text 返回页面内容
             if "text" in data:
                 text = data["text"][:3000]  # 截断，防止对话历史过长
-                return f"页面标题: {data.get('title', '')}\nURL: {data.get('url', '')}\n页面内容:\n{text}"
+                _t = data.get("title", "")
+                _u = data.get("url", "")
+                return f"页面标题: {_t}\nURL: {_u}\n页面内容:\n{text}"
             # search 返回搜索结果
             if "results" in data:
                 results = data["results"]
