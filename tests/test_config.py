@@ -63,11 +63,11 @@ class TestSettingsDefaults:
         assert s.browser_timeout == 30000
 
     def test_default_host(self):
-        """host 默认值应为 '0.0.0.0'。"""
+        """host 默认值应为 '127.0.0.1'。"""
         from config import Settings
 
         s = Settings()
-        assert s.host == "0.0.0.0"
+        assert s.host == "127.0.0.1"
 
     def test_default_port(self):
         """port 默认值应为 8000。"""
