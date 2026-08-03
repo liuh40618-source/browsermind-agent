@@ -34,6 +34,6 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --prefer-binary -r requirements-dev.txt
-          playwright install chromium
+          playwright install --with-deps chromium
       - name: Run tests
         run: pytest --tb=short -q
