@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 470" font-family="'Inter','Plus Jakarta Sans',system-ui,sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#64748b"/>
+    </marker>
+  </defs>
+  <rect width="680" height="470" fill="#f8fafc"/>
+  <text x="340" y="28" text-anchor="middle" font-size="18" font-weight="700" fill="#0f172a">BrowserMind · 系统架构</text>
+
+  <!-- Layer 1: Frontend -->
+  <rect x="190" y="46" width="300" height="42" rx="10" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="340" y="66" text-anchor="middle" font-size="13" font-weight="600" fill="#312e81">Web 前端 · React 三栏工作台</text>
+  <text x="340" y="82" text-anchor="middle" font-size="11" fill="#6366f1">⇄ WebSocket 实时流式</text>
+
+  <line x1="340" y1="88" x2="340" y2="110" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Layer 2: FastAPI -->
+  <rect x="140" y="114" width="400" height="46" rx="10" fill="#ecfeff" stroke="#06b6d4" stroke-width="1.5"/>
+  <text x="340" y="136" text-anchor="middle" font-size="13" font-weight="600" fill="#0e7490">FastAPI 后端</text>
+  <text x="340" y="152" text-anchor="middle" font-size="11" fill="#0891b2">REST /api/agent/run · WebSocket /api/agent/stream · 任务历史 API</text>
+
+  <line x1="340" y1="160" x2="340" y2="184" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Layer 3: Agent orchestration -->
+  <g font-size="12">
+    <rect x="20" y="188" width="150" height="48" rx="10" fill="#fff" stroke="#6d5efc" stroke-width="1.5"/>
+    <text x="95" y="210" text-anchor="middle" font-weight="600" fill="#5b21b6">Planner</text>
+    <text x="95" y="226" text-anchor="middle" font-size="10.5" fill="#7c3aed">任务 → 步骤拆解</text>
+
+    <rect x="180" y="188" width="160" height="48" rx="10" fill="#fff" stroke="#2f6bff" stroke-width="1.5"/>
+    <text x="260" y="210" text-anchor="middle" font-weight="600" fill="#1d4ed8">AgentLoop</text>
+    <text x="260" y="226" text-anchor="middle" font-size="10.5" fill="#2563eb">think → act → observe</text>
+
+    <rect x="350" y="188" width="150" height="48" rx="10" fill="#fff" stroke="#d6409f" stroke-width="1.5"/>
+    <text x="425" y="210" text-anchor="middle" font-weight="600" fill="#be185d">Reflection</text>
+    <text x="425" y="226" text-anchor="middle" font-size="10.5" fill="#db2777">完成度评估</text>
+
+    <rect x="510" y="188" width="150" height="48" rx="10" fill="#fff" stroke="#d98300" stroke-width="1.5"/>
+    <text x="585" y="210" text-anchor="middle" font-weight="600" fill="#b45309">Analyst</text>
+    <text x="585" y="226" text-anchor="middle" font-size="10.5" fill="#d97706">→ Markdown 报告</text>
+  </g>
+
+  <line x1="260" y1="236" x2="260" y2="260" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Layer 4: Tools -->
+  <g font-size="12">
+    <rect x="20" y="264" width="200" height="46" rx="10" fill="#fff" stroke="#2f6bff" stroke-width="1.5"/>
+    <text x="120" y="286" text-anchor="middle" font-weight="600" fill="#1d4ed8">BrowserTool</text>
+    <text x="120" y="302" text-anchor="middle" font-size="10.5" fill="#2563eb">Playwright 真实浏览器</text>
+
+    <rect x="240" y="264" width="200" height="46" rx="10" fill="#fff" stroke="#11a36e" stroke-width="1.5"/>
+    <text x="340" y="286" text-anchor="middle" font-weight="600" fill="#0f766e">Parser</text>
+    <text x="340" y="302" text-anchor="middle" font-size="10.5" fill="#0d9488">BS4 + Readability → MD</text>
+
+    <rect x="460" y="264" width="200" height="46" rx="10" fill="#fff" stroke="#11a36e" stroke-width="1.5"/>
+    <text x="560" y="286" text-anchor="middle" font-weight="600" fill="#0f766e">Search</text>
+    <text x="560" y="302" text-anchor="middle" font-size="10.5" fill="#0d9488">DuckDuckGo（免密钥）</text>
+  </g>
+
+  <line x1="260" y1="310" x2="260" y2="334" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Layer 5: Storage + LLM -->
+  <rect x="20" y="338" width="300" height="46" rx="10" fill="#fff" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="170" y="360" text-anchor="middle" font-weight="600" fill="#334155">SQLite · tasks.db</text>
+  <text x="170" y="376" text-anchor="middle" font-size="10.5" fill="#64748b">任务历史 / 用户配置</text>
+
+  <rect x="360" y="338" width="300" height="46" rx="10" fill="#fef9c3" stroke="#eab308" stroke-width="1.5"/>
+  <text x="510" y="360" text-anchor="middle" font-weight="600" fill="#854d0e">LLM · OpenAI 兼容 API</text>
+  <text x="510" y="376" text-anchor="middle" font-size="10.5" fill="#a16207">Qwen / DeepSeek / GPT</text>
+
+  <!-- human-in-the-loop -->
+  <rect x="20" y="400" width="640" height="46" rx="10" fill="#faf5ff" stroke="#a855f7" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text x="340" y="420" text-anchor="middle" font-size="11.5" fill="#7e22ce">Human-in-the-loop：Reflection 阶段可暂停，等待用户决策（continue / adjust）或追加指令</text>
+  <text x="340" y="437" text-anchor="middle" font-size="10" fill="#a855f7">WebSocket 双向通道 · 支持多轮对话</text>
+</svg>

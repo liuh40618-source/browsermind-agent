@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 430" font-family="'Plus Jakarta Sans',system-ui,sans-serif">
+  <rect width="680" height="430" rx="14" fill="#0a0e1a"/>
+  <rect x="0" y="0" width="680" height="34" fill="#0f1424"/>
+  <circle cx="20" cy="17" r="5" fill="#ef4444"/>
+  <circle cx="36" cy="17" r="5" fill="#f59e0b"/>
+  <circle cx="52" cy="17" r="5" fill="#10b981"/>
+  <text x="340" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#e8ecf4">BrowserMind</text>
+
+  <!-- left column -->
+  <rect x="12" y="46" width="200" height="372" rx="12" fill="#0f1424" stroke="#1a2140"/>
+  <text x="28" y="70" font-size="12" font-weight="700" fill="#8b5cf6">任务 Task</text>
+  <rect x="28" y="82" width="168" height="56" rx="8" fill="#141a2e" stroke="#1a2140"/>
+  <text x="38" y="104" font-size="10.5" fill="#8b93a8">“对比 GPT-4o 与</text>
+  <text x="38" y="120" font-size="10.5" fill="#8b93a8">Claude 的 Agent 能力”</text>
+  <rect x="28" y="150" width="168" height="26" rx="13" fill="#8b5cf6"/>
+  <text x="112" y="167" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">▶ 运行</text>
+  <text x="28" y="200" font-size="12" font-weight="700" fill="#8b5cf6">执行计划</text>
+  <g font-size="11" fill="#cdd3e0">
+    <circle cx="34" cy="218" r="4" fill="#10b981"/><text x="46" y="222">1. 检索官方文档</text>
+    <circle cx="34" cy="240" r="4" fill="#10b981"/><text x="46" y="244">2. 打开对比页面</text>
+    <circle cx="34" cy="262" r="4" fill="#f59e0b"/><text x="46" y="266">3. 抽取能力指标</text>
+    <circle cx="34" cy="284" r="4" fill="#334155"/><text x="46" y="288">4. 生成报告</text>
+  </g>
+
+  <!-- center column -->
+  <rect x="224" y="46" width="280" height="372" rx="12" fill="#0f1424" stroke="#1a2140"/>
+  <text x="240" y="70" font-size="12" font-weight="700" fill="#e8ecf4">执行时间线 Timeline</text>
+  <g font-size="10.5">
+    <circle cx="244" cy="96" r="6" fill="#6d5efc"/>
+    <rect x="258" y="84" width="64" height="20" rx="10" fill="#ede9fe"/><text x="290" y="98" text-anchor="middle" fill="#5b21b6">Planner</text>
+    <text x="334" y="98" fill="#8b93a8">拆解任务为 4 步</text>
+    <line x1="244" y1="102" x2="244" y2="128" stroke="#334155"/>
+    <circle cx="244" cy="134" r="6" fill="#2f6bff"/>
+    <rect x="258" y="122" width="80" height="20" rx="10" fill="#dbeafe"/><text x="298" y="136" text-anchor="middle" fill="#1d4ed8">Browser</text>
+    <text x="346" y="136" fill="#8b93a8">打开 docs.openai.com</text>
+    <line x1="244" y1="140" x2="244" y2="166" stroke="#334155"/>
+    <circle cx="244" cy="172" r="6" fill="#11a36e"/>
+    <rect x="258" y="160" width="64" height="20" rx="10" fill="#d1fae5"/><text x="290" y="174" text-anchor="middle" fill="#065f46">Parser</text>
+    <text x="334" y="174" fill="#8b93a8">抽取正文为 MD</text>
+    <line x1="244" y1="178" x2="244" y2="204" stroke="#334155"/>
+    <circle cx="244" cy="210" r="6" fill="#d98300"/>
+    <rect x="258" y="198" width="70" height="20" rx="10" fill="#fef3c7"/><text x="293" y="212" text-anchor="middle" fill="#92400e">Analyst</text>
+    <text x="338" y="212" fill="#8b93a8">生成结构化报告</text>
+    <line x1="244" y1="216" x2="244" y2="242" stroke="#334155"/>
+    <circle cx="244" cy="248" r="6" fill="#d6409f"/>
+    <rect x="258" y="236" width="86" height="20" rx="10" fill="#fce7f3"/><text x="301" y="250" text-anchor="middle" fill="#9d174d">Reflection</text>
+    <text x="354" y="250" fill="#8b93a8">评估完成度 ✅</text>
+  </g>
+  <rect x="240" y="280" width="248" height="120" rx="10" fill="#141a2e" stroke="#1a2140"/>
+  <text x="252" y="300" font-size="10.5" fill="#525b73" font-family="monospace">[12:01:33] Planner · 生成 4 步计划</text>
+  <text x="252" y="318" font-size="10.5" fill="#525b73" font-family="monospace">[12:01:41] Browser · navigate → OK</text>
+  <text x="252" y="336" font-size="10.5" fill="#525b73" font-family="monospace">[12:01:55] Parser · 2,310 → 540 字</text>
+  <text x="252" y="354" font-size="10.5" fill="#525b73" font-family="monospace">[12:02:10] Analyst · 报告就绪</text>
+  <text x="252" y="372" font-size="10.5" fill="#525b73" font-family="monospace">[12:02:18] Reflection · score 0.92</text>
+  <text x="252" y="392" font-size="10.5" fill="#10b981" font-family="monospace">✓ 任务完成 · 46.2s</text>
+
+  <!-- right column -->
+  <rect x="516" y="46" width="152" height="372" rx="12" fill="#0f1424" stroke="#1a2140"/>
+  <text x="532" y="70" font-size="12" font-weight="700" fill="#e8ecf4">报告 Report</text>
+  <rect x="532" y="82" width="120" height="14" rx="3" fill="#1a2140"/>
+  <rect x="532" y="104" width="120" height="10" rx="3" fill="#141a2e"/>
+  <rect x="532" y="120" width="100" height="10" rx="3" fill="#141a2e"/>
+  <rect x="532" y="142" width="120" height="14" rx="3" fill="#1a2140"/>
+  <rect x="532" y="164" width="110" height="10" rx="3" fill="#141a2e"/>
+  <rect x="532" y="180" width="120" height="10" rx="3" fill="#141a2e"/>
+  <rect x="532" y="202" width="120" height="14" rx="3" fill="#1a2140"/>
+  <rect x="532" y="224" width="90" height="10" rx="3" fill="#141a2e"/>
+  <rect x="532" y="384" width="120" height="24" rx="12" fill="#10b981"/>
+  <text x="592" y="400" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">⬇ 下载 Markdown</text>
+</svg>
