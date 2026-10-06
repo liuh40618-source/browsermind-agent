@@ -1,0 +1,36 @@
+[project]
+name = "browsermind"
+version = "0.6.0"
+description = "Autonomous AI agent for browsing, understanding, and reporting."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+python_files = ["test_*.py"]
+# 测试目录视为包内可导入（避免 sys.path 问题）
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [".venv", ".git", "data", "logs"]
+
+# 只启用一组收敛的规则：语法错误(F) + 未使用变量/导入(F841/F401) + 未定义名称(F821)
+[tool.ruff.lint]
+select = ["F"]
+ignore = ["F401"]
+
+[tool.ruff.lint.per-file-ignores]
+# 测试文件允许未使用导入（fixture 风格）
+"tests/*.py" = ["F841"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = false
+exclude = [".venv", "data", "logs"]
+
+[[tool.mypy.overrides]]
+module = ["openai", "playwright", "readability", "html2text", "bs4"]
+ignore_missing_imports = true

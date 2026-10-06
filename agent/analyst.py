@@ -87,7 +87,7 @@ class Analyst:
             context_parts.append(json.dumps(info, ensure_ascii=False, indent=2)[:3000])
 
         if visited_pages:
-            context_parts.append(f"\n## 访问的页面\n" + "\n".join(f"- {u}" for u in visited_pages))
+            context_parts.append("\n## 访问的页面\n" + "\n".join(f"- {u}" for u in visited_pages))
 
         context = "\n".join(context_parts)
 

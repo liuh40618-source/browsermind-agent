@@ -15,6 +15,7 @@ import logging
 import httpx
 import re
 from urllib.parse import quote
+from tools import tool, BACKEND_SEARCH
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ class SearchTool:
         except Exception:
             pass
 
+    @tool("search", backend=BACKEND_SEARCH)
     async def search(self, query: str, max_results: int = 5) -> dict[str, Any]:
         """执行搜索，自动选择最佳后端。
 
@@ -62,7 +64,7 @@ class SearchTool:
 
     async def _search_duckduckgo(
         self, query: str, max_results: int
-    ) -> list[dict[str, str]]:
+    ) -> list[dict[str, Any]]:
         """通过 DuckDuckGo 搜索，DDG 被拦截时自动降级到浏览器搜索。"""
         # 尝试 DDG HTML API
         results = await self._try_ddg_html(query, max_results)
@@ -79,7 +81,7 @@ class SearchTool:
 
     async def _try_ddg_html(
         self, query: str, max_results: int
-    ) -> list[dict[str, str]]:
+    ) -> list[dict[str, Any]]:
         """尝试 DDG HTML API 搜索，检测 bot 拦截。"""
         url = "https://html.duckduckgo.com/html/"
         headers = {
@@ -166,7 +168,7 @@ class SearchTool:
 
     async def _search_via_browser(
         self, query: str, max_results: int
-    ) -> list[dict[str, str]]:
+    ) -> list[dict[str, Any]]:
         """使用 Playwright 浏览器搜索（通过 Bing，bot 检测较宽松）。
 
         DuckDuckGo 和 Google 均对 headless 浏览器有严格检测，
@@ -256,7 +258,7 @@ class SearchTool:
 
     async def _search_tavily(
         self, query: str, max_results: int
-    ) -> list[dict[str, str]]:
+    ) -> list[dict[str, Any]]:
         """通过 Tavily API 搜索（高质量，需 API key）。"""
         url = "https://api.tavily.com/search"
         payload = {
@@ -284,14 +286,19 @@ class SearchTool:
         return results
 
     def _rank_results(
-        self, results: list[dict[str, str]], query: str
-    ) -> list[dict[str, str]]:
+        self, results: list[dict[str, Any]], query: str
+    ) -> list[dict[str, Any]]:
         """按相关性排序搜索结果。"""
         query_lower = query.lower()
         query_words = set(query_lower.split())
 
         for r in results:
-            score = r.get("score", 0.5)
+            # score 可能来自 Tavily（float）或缺省（0.5），
+            # 强制转 float 防止字符串拼接崩溃
+            try:
+                score = float(r.get("score", 0.5))
+            except (TypeError, ValueError):
+                score = 0.5
             title = r.get("title", "").lower()
             snippet = r.get("snippet", "").lower()
             url = r.get("url", "").lower()

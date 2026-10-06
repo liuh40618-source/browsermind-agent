@@ -7,8 +7,9 @@ LLM 调用层
 
 import json
 from typing import Any
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, APITimeoutError, APIConnectionError
 from config import settings
+from tools import retry_async
 
 
 # ── 浏览器工具描述 ──────────────────────────────────────
@@ -169,29 +170,51 @@ class LLMClient:
     """LLM 客户端，封装对大模型的调用，支持多轮对话。"""
 
     def __init__(self):
+        self._ready = False
+        self._client = None
+        self._model = None
         self._reload()
 
     # LLM 请求超时（秒）
     _REQUEST_TIMEOUT = 120
 
     def _reload(self):
-        """根据当前 settings 重新创建客户端。"""
+        """根据当前 settings 重新创建客户端。
+
+        关键改动：缺 Key 时不再抛异常，而是标记 _ready=False，
+        让整个应用在「未配置 API Key」时也能正常启动（降级到设置页）。
+        真正的报错推迟到首次真正调用大模型时（_ensure_ready）。
+        """
         base_url = settings.llm_base_url or None
-        api_key = settings.llm_api_key
+        # 按当前 provider 取对应的 API Key（支持多供应商各自配置 Key）
+        try:
+            from settings_store import settings_store
+            api_key = settings_store.get_key_for_provider(settings.llm_provider) or settings.llm_api_key
+        except Exception:
+            api_key = settings.llm_api_key
         if not api_key or api_key in ("your-api-key-here", ""):
-            raise ValueError(
-                "LLM API Key 未配置。请在前端设置页面配置 API Key，或在 .env 中设置 LLM_API_KEY。"
-            )
+            self._ready = False
+            self._client = None
+            self._model = None
+            return
         self._client = AsyncOpenAI(
             api_key=api_key,
             base_url=base_url,
             timeout=self._REQUEST_TIMEOUT,
         )
         self._model = settings.llm_model
+        self._ready = True
 
     def reload(self):
         """外部调用：配置变更后重新加载。"""
         self._reload()
+
+    def _ensure_ready(self):
+        """真正调用大模型前断言已就绪，否则抛出清晰错误（由 WS 通道透传）。"""
+        if not self._ready or self._client is None:
+            raise RuntimeError(
+                "LLM API Key 尚未配置，无法运行任务。请点击右上角 ⚙ 设置填写 API Key 并保存。"
+            )
 
     def _extract_content(self, response) -> str:
         """从 LLM 响应中提取文本内容（统一空 choices 检查）。"""
@@ -205,18 +228,14 @@ class LLMClient:
         conversation_history: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """让 LLM 根据任务和对话历史，决定下一步操作。"""
+        self._ensure_ready()
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": f"Task: {task}"},
         ]
         messages.extend(conversation_history)
 
-        response = await self._client.chat.completions.create(
-            model=self._model,
-            messages=messages,
-            tools=BROWSER_TOOLS_SCHEMA,
-            tool_choice="auto",
-        )
+        response = await self._chat_with_retry(messages, tools=BROWSER_TOOLS_SCHEMA)
 
         if not response.choices:
             raise RuntimeError("LLM 返回空的 choices，请检查模型配置或 API 状态。")
@@ -255,16 +274,39 @@ class LLMClient:
         response_format: dict[str, str] | None = None,
     ) -> str:
         """通用 chat completion 调用（供 Planner / Reflection / Analyst / extract_info 共享）。"""
+        self._ensure_ready()
+        response = await self._chat_with_retry(messages, response_format=response_format)
+        return self._extract_content(response)
+
+    # LLM 网络调用重试：OpenAI SDK 的 APITimeoutError / APIConnectionError
+    # 不继承内置 TimeoutError/OSError，必须显式列出
+    _RETRYABLE = (TimeoutError, ConnectionError, OSError, APITimeoutError, APIConnectionError)
+
+    @retry_async(max_attempts=3, base_delay=1.0, max_delay=8.0, retryable_exceptions=_RETRYABLE)
+    async def _chat_with_retry(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        response_format: dict[str, str] | None = None,
+    ) -> Any:
+        """带指数退避重试的 chat.completions.create。
+
+        只重试网络类瞬态错误（TimeoutError / ConnectionError / OSError）。
+        API Key 错误（AuthenticationError）等业务错误直接抛出，不重试。
+        """
         kwargs: dict[str, Any] = {"model": self._model, "messages": messages}
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
         if response_format:
             kwargs["response_format"] = response_format
-        response = await self._client.chat.completions.create(**kwargs)
-        return self._extract_content(response)
+        return await self._client.chat.completions.create(**kwargs)
 
     async def extract_info(
         self, task: str, raw_text: str, fields: list[str] | None = None
     ) -> dict[str, Any]:
         """从网页文本中提取结构化信息（复用 chat() 方法）。"""
+        self._ensure_ready()
         fields_hint = f"重点提取以下字段：{', '.join(fields)}" if fields else "提取与任务相关的关键信息"
         extract_prompt = f"""你是一个信息提取器。从网页文本中提取与任务相关的结构化信息。
 

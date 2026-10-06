@@ -73,7 +73,7 @@ class Parser:
         soup = BeautifulSoup(html, "lxml")
 
         # 收集要删除的元素（避免边遍历边删除）
-        to_remove = []
+        to_remove: list[Any] = []
 
         # 噪声标签
         for tag_name in _REMOVE_TAGS:
@@ -108,9 +108,7 @@ class Parser:
             pass
 
         # Readability 提取内容太少 → 回退到 <main>/<article>/<body>
-        fallback_used = False
         if len(readable_html) < 200:
-            fallback_used = True
             for selector in ["main", "article", "#content", ".content", ".markdown-body", "body"]:
                 found = soup.find(selector)
                 if found:

@@ -47,7 +47,8 @@ class TaskStore:
                     logs TEXT,
                     created_at TEXT NOT NULL,
                     completed_at TEXT,
-                    duration_seconds INTEGER DEFAULT 0
+                    duration_seconds INTEGER DEFAULT 0,
+                    parent_id INTEGER
                 )
             """)
             # 迁移：旧表没有 duration_seconds 列时自动添加
@@ -55,6 +56,11 @@ class TaskStore:
                 conn.execute("SELECT duration_seconds FROM tasks LIMIT 1")
             except sqlite3.OperationalError:
                 conn.execute("ALTER TABLE tasks ADD COLUMN duration_seconds INTEGER DEFAULT 0")
+            # 迁移：旧表没有 parent_id 列时自动添加（追问轮的父子关联）
+            try:
+                conn.execute("SELECT parent_id FROM tasks LIMIT 1")
+            except sqlite3.OperationalError:
+                conn.execute("ALTER TABLE tasks ADD COLUMN parent_id INTEGER")
             conn.commit()
 
     def save_task(
@@ -67,14 +73,18 @@ class TaskStore:
         final_report: str,
         logs: list[dict],
         duration_seconds: int = 0,
+        parent_id: int | None = None,
     ) -> int:
-        """保存任务记录，返回任务 ID。"""
+        """保存任务记录，返回任务 ID。
+
+        parent_id: 若是追问轮，传入上一轮任务的 ID，形成父子关联。
+        """
         now = datetime.now().isoformat()
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
                 """
-                INSERT INTO tasks (task, status, plan, visited_pages, extracted_info, final_report, logs, created_at, completed_at, duration_seconds)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO tasks (task, status, plan, visited_pages, extracted_info, final_report, logs, created_at, completed_at, duration_seconds, parent_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task,
@@ -87,10 +97,25 @@ class TaskStore:
                     now,
                     now,
                     duration_seconds,
+                    parent_id,
                 ),
             )
             conn.commit()
-            return cursor.lastrowid
+            last_id = cursor.lastrowid
+            if last_id is None:
+                raise RuntimeError("SQLite 未返回插入 ID")
+            return last_id
+
+    def update_report(self, task_id: int, final_report: str) -> bool:
+        """更新任务的最终报告（轻量重生成场景：复用已抓信息，不重跑 Agent）。"""
+        now = datetime.now().isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "UPDATE tasks SET final_report = ?, completed_at = ? WHERE id = ?",
+                (final_report, now, task_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
 
     def get_task(self, task_id: int) -> dict[str, Any] | None:
         """获取单个任务详情。"""
@@ -101,20 +126,42 @@ class TaskStore:
                 return None
             return self._row_to_dict(row)
 
-    def list_tasks(self, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+    def list_tasks(
+        self, limit: int = 50, offset: int = 0, q: str = "", status: str = "",
+        summary: bool = False,
+    ) -> list[dict[str, Any]]:
         """获取任务列表（按时间倒序）。"""
+        where, params = self._filters(q, status)
+        columns = (
+            "id, task, status, created_at, duration_seconds, parent_id, "
+            "substr(final_report, 1, 240) AS report_excerpt"
+        ) if summary else "*"
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
-                "SELECT * FROM tasks ORDER BY id DESC LIMIT ? OFFSET ?",
-                (limit, offset),
+                f"SELECT {columns} FROM tasks {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+                (*params, limit, offset),
             ).fetchall()
+            if summary:
+                return [dict(row) for row in rows]
             return [self._row_to_dict(r) for r in rows]
 
-    def count_tasks(self) -> int:
+    @staticmethod
+    def _filters(q: str, status: str) -> tuple[str, list[str]]:
+        clauses, params = [], []
+        if q:
+            clauses.append("(instr(lower(task), lower(?)) > 0 OR instr(lower(final_report), lower(?)) > 0)")
+            params.extend([q, q])
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        return ("WHERE " + " AND ".join(clauses) if clauses else ""), params
+
+    def count_tasks(self, q: str = "", status: str = "") -> int:
         """获取任务总数。"""
+        where, params = self._filters(q, status)
         with sqlite3.connect(self.db_path) as conn:
-            row = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()
+            row = conn.execute(f"SELECT COUNT(*) FROM tasks {where}", params).fetchone()
             return row[0]
 
     def delete_task(self, task_id: int) -> bool:

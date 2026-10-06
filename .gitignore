@@ -37,3 +37,4 @@ node_modules/
 
 # WorkBuddy internal data (tool state, not project source)
 .workbuddy-ai/
+.workbuddy/

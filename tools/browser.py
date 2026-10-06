@@ -6,67 +6,70 @@ Browser Tool - 浏览器控制封装层
 - LLM 输出 {"tool": "click", "arguments": {"text": "Pricing"}}
 - 系统执行 Playwright 操作，返回统一契约
 
+并发隔离（阶段6）：
+- BrowserTool 只负责「启动/关闭浏览器进程」，是全局单例。
+- 每次任务/每次 WebSocket 连接通过 new_session() 拿到独立的 BrowserSession
+  （独立 context + page），多个任务同时跑也不会互相串台。
+
 6 个能力：open / click / type / scroll / screenshot / get_text
 """
 
 from typing import Any
-from playwright.async_api import async_playwright, Browser, Page
+from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from config import settings
+from tools import tool, register_tool, BACKEND_BROWSER
 
 
-class BrowserTool:
-    """浏览器工具封装，对 Agent 暴露语义化接口。"""
+class BrowserSession:
+    """单会话隔离：独立 context + page，一次 Agent 任务独占，结束即关闭。"""
 
-    def __init__(self):
-        self._playwright = None
-        self._browser: Browser | None = None
+    def __init__(self, browser: Browser):
+        self._browser = browser
+        self._context: BrowserContext | None = None
         self._page: Page | None = None
 
-    # ── 生命周期 ──────────────────────────────────────────
-
     async def start(self) -> None:
-        """启动 Playwright 和浏览器。"""
-        self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.launch(
-            headless=settings.browser_headless
-        )
-        self._page = await self._browser.new_page()
+        """为本次会话创建独立 context + page。"""
+        self._context = await self._browser.new_context()
+        self._page = await self._context.new_page()
         self._page.set_default_timeout(settings.browser_timeout)
 
     async def close(self) -> None:
-        """关闭浏览器，释放资源。"""
+        """关闭本会话的 context + page（不影响浏览器进程与其他会话）。"""
         try:
             if self._page:
                 await self._page.close()
         except Exception:
             pass
         try:
-            if self._browser:
-                await self._browser.close()
-        except Exception:
-            pass
-        try:
-            if self._playwright:
-                await self._playwright.stop()
+            if self._context:
+                await self._context.close()
         except Exception:
             pass
         self._page = None
-        self._browser = None
-        self._playwright = None
+        self._context = None
 
     def _ensure_page(self) -> Page:
         """确保页面已初始化。"""
         if self._page is None:
-            raise RuntimeError("Browser not started. Call start() first.")
+            raise RuntimeError("Browser session not started. Call start() first.")
         return self._page
 
     # ── 6 个核心能力 ──────────────────────────────────────
 
+    @tool("open_page", backend=BACKEND_BROWSER)
     async def open_page(self, url: str) -> dict[str, Any]:
-        """打开网页。"""
+        """打开网页。
+
+        SPA 渲染等待策略（解决 JS 动态渲染抓取空壳问题）：
+        1. 优先等网络空闲（networkidle）——SPA 的 JS 包与首屏数据拉取完成
+        2. networkidle 超时（页面有长轮询/WebSocket）→ 降级 domcontentloaded
+        3. 显式等渲染完成信号（#root > *）——React 往根容器渲染出内容
+        4. 固定等待，给 setState 上屏留时间
+        """
         page = self._ensure_page()
         try:
-            await page.goto(url, wait_until="domcontentloaded")
+            await self._goto_with_render_wait(page, url)
             return {
                 "tool": "open_page",
                 "status": "success",
@@ -81,6 +84,37 @@ class BrowserTool:
                 "data": {"url": url},
             }
 
+    async def _goto_with_render_wait(self, page: Page, url: str) -> None:
+        """导航 + SPA 渲染等待（L1 网络空闲 + L2 显式选择器等待）。
+
+        参数:
+            page: Playwright Page
+            url: 目标 URL
+
+        行为:
+        - 先试 networkidle（等所有网络请求结束，SPA 首屏数据就绪）
+        - 若超时（页面有长轮询/WebSocket 保持连接），降级 domcontentloaded
+        - 配置了 browser_render_selector 时，显式等待该选择器出现内容
+        - 最后固定等待 browser_render_wait_ms，让渲染真正上屏
+        """
+        # L1: 网络空闲优先；超时则降级（避免长轮询页面卡满 timeout）
+        try:
+            await page.goto(url, wait_until="networkidle")
+        except Exception:
+            await page.goto(url, wait_until="domcontentloaded")
+
+        # L2: 显式等渲染完成信号（SPA 根容器出现子元素）
+        selector = settings.browser_render_selector
+        if selector:
+            try:
+                await page.wait_for_selector(selector, timeout=settings.browser_timeout)
+            except Exception:
+                pass  # 非 SPA 页面没有该选择器，忽略
+
+        # 固定等待：给 JS 渲染上屏留时间
+        await page.wait_for_timeout(settings.browser_render_wait_ms)
+
+    @tool("click", backend=BACKEND_BROWSER)
     async def click(self, text: str) -> dict[str, Any]:
         """按文字点击元素（不直接用 CSS 选择器）。
 
@@ -143,6 +177,7 @@ class BrowserTool:
                 "data": {"text": text},
             }
 
+    @tool("type", backend=BACKEND_BROWSER)
     async def type_text(self, selector: str, value: str) -> dict[str, Any]:
         """在输入框中输入文本。
 
@@ -186,6 +221,7 @@ class BrowserTool:
                 "data": {"selector": selector, "value": value},
             }
 
+    @tool("scroll", backend=BACKEND_BROWSER)
     async def scroll(self, direction: str = "down", times: int = 3) -> dict[str, Any]:
         """滚动页面，加载懒加载内容。
 
@@ -212,6 +248,7 @@ class BrowserTool:
                 "data": {"direction": direction, "times": times},
             }
 
+    @tool("screenshot", backend=BACKEND_BROWSER)
     async def screenshot(self) -> dict[str, Any]:
         """截图，返回 base64 编码的图片。"""
         page = self._ensure_page()
@@ -233,6 +270,7 @@ class BrowserTool:
                 "data": {},
             }
 
+    @tool("get_text", backend=BACKEND_BROWSER)
     async def get_text(self) -> dict[str, Any]:
         """获取页面文本内容（阶段3起：返回 Parser 解析后的结构化内容）。"""
         page = self._ensure_page()
@@ -303,3 +341,48 @@ class BrowserTool:
             }
 
         return await handler()
+
+
+class BrowserTool:
+    """浏览器管理封装，全局单例：只负责启动/关闭 Chromium，按需提供隔离会话。"""
+
+    def __init__(self):
+        self._playwright = None
+        self._browser: Browser | None = None
+
+    # ── 生命周期（仅浏览器进程级）──────────────────────────
+
+    async def start(self) -> None:
+        """启动 Playwright 和浏览器进程（不创建任何 page）。"""
+        self._playwright = await async_playwright().start()
+        self._browser = await self._playwright.chromium.launch(
+            headless=settings.browser_headless
+        )
+
+    async def new_session(self) -> BrowserSession:
+        """为一次任务/连接开辟独立浏览器会话（独立 context + page）。"""
+        if self._browser is None:
+            raise RuntimeError("Browser not started. Call start() first.")
+        session = BrowserSession(self._browser)
+        await session.start()
+        return session
+
+    async def close(self) -> None:
+        """关闭浏览器进程，释放资源。"""
+        try:
+            if self._browser:
+                await self._browser.close()
+        except Exception:
+            pass
+        try:
+            if self._playwright:
+                await self._playwright.stop()
+        except Exception:
+            pass
+        self._browser = None
+        self._playwright = None
+
+
+# ── 工具注册表：别名注册 ─────────────────────────────────
+# open 是 open_page 的兼容别名（LLM 偶尔输出 open）
+register_tool("open", BACKEND_BROWSER, "open_page")
