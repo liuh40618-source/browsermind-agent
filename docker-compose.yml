@@ -1,0 +1,21 @@
+# BrowserMind docker-compose
+# 用法：cp .env.example .env 并填入 LLM_API_KEY 后
+#   docker compose up -d --build
+# 打开 http://localhost:8000
+services:
+  browsermind:
+    build: .
+    container_name: browsermind
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # 容器内使用 headless 模式；数据写入挂载卷
+      BROWSER_HEADLESS: "true"
+    volumes:
+      # 持久化任务数据库与用户配置（含 API Key 的 user_config.json）
+      - ./data:/app/data
+      # 持久化日志
+      - ./logs:/app/logs
+    restart: unless-stopped

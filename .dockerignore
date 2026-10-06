@@ -1,0 +1,20 @@
+# Docker 构建上下文排除（保持镜像小、不泄露密钥）
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.gitignore
+.idea/
+.vscode/
+data/
+logs/
+.env
+*.log
+*.db
+*.db-shm
+*.db-wal
+tests/
+.pytest_cache/
+.workbuddy/
+.workbuddy-ai/

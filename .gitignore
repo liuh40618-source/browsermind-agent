@@ -35,11 +35,6 @@ Thumbs.db
 # Node (if frontend tooling added later)
 node_modules/
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Distribution
-*.tar.gz
-*.whl
+# WorkBuddy internal data (tool state, not project source)
+.workbuddy-ai/
+.workbuddy/

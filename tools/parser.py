@@ -26,10 +26,9 @@ Parser - 网页理解工具
 
 import re
 from typing import Any
-
-import html2text
 from bs4 import BeautifulSoup
 from readability import Document
+import html2text
 
 
 # html2text 配置（线程安全：每次调用创建新实例）
@@ -74,7 +73,7 @@ class Parser:
         soup = BeautifulSoup(html, "lxml")
 
         # 收集要删除的元素（避免边遍历边删除）
-        to_remove = []
+        to_remove: list[Any] = []
 
         # 噪声标签
         for tag_name in _REMOVE_TAGS:
@@ -110,15 +109,7 @@ class Parser:
 
         # Readability 提取内容太少 → 回退到 <main>/<article>/<body>
         if len(readable_html) < 200:
-            _selectors = [
-                "main",
-                "article",
-                "#content",
-                ".content",
-                ".markdown-body",
-                "body",
-            ]
-            for selector in _selectors:
+            for selector in ["main", "article", "#content", ".content", ".markdown-body", "body"]:
                 found = soup.find(selector)
                 if found:
                     readable_html = str(found)
@@ -183,12 +174,10 @@ class Parser:
             if heading_match:
                 # 保存上一个段落
                 if current_lines or current_heading:
-                    sections.append(
-                        {
-                            "heading": current_heading,
-                            "content": "\n".join(current_lines).strip(),
-                        }
-                    )
+                    sections.append({
+                        "heading": current_heading,
+                        "content": "\n".join(current_lines).strip(),
+                    })
                 current_heading = heading_match.group(2).strip()
                 current_lines = []
             else:
@@ -198,22 +187,15 @@ class Parser:
         if current_lines or current_heading:
             content = "\n".join(current_lines).strip()
             if content or current_heading:
-                sections.append(
-                    {
-                        "heading": current_heading,
-                        "content": content,
-                    }
-                )
+                sections.append({
+                    "heading": current_heading,
+                    "content": content,
+                })
 
         # 过滤掉空段落
         return [s for s in sections if s["content"] or s["heading"]]
 
-    def parse_for_llm(
-        self,
-        html: str,
-        url: str = "",
-        parsed: dict | None = None,
-    ) -> str:
+    def parse_for_llm(self, html: str, url: str = "", parsed: dict | None = None) -> str:
         """解析 HTML 并返回给 LLM 用的精简文本。
 
         parsed: 已解析的结果（避免重复解析同一份 HTML）。

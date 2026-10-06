@@ -6,12 +6,17 @@ Settings Store - 运行时配置存储
 """
 
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
+
 
 CONFIG_PATH = Path(__file__).resolve().parent / "data" / "user_config.json"
 
 # 预设供应商配置模板
+# 只放真实存在的模型名，不编造倍率/标签等元数据
 PRESETS = {
     "openai": {
         "label": "OpenAI",
@@ -35,6 +40,78 @@ PRESETS = {
     },
 }
 
+# 可配置字段白名单（防止写入任意键）
+ALLOWED_KEYS = {
+    "llm_provider", "llm_model", "llm_api_key", "llm_base_url", "tavily_api_key",
+    "provider_api_keys",
+}
+
+# 敏感键：后端使用，前端不展示
+_SENSITIVE_KEYS = {"llm_api_key", "tavily_api_key", "provider_api_keys"}
+
+
+
+
+class ConfigValidationError(ValueError):
+    """配置校验失败，message 为对用户友好的中文提示。"""
+
+
+def validate_settings(data: dict[str, Any]) -> list[str]:
+    """校验用户提交的配置，返回错误列表（空列表 = 全部合法）。
+
+    校验规则：
+    - llm_provider: 必须在 PRESETS 中
+    - llm_model: 非空字符串
+    - llm_base_url: 必须是 http(s):// 开头（若提供）
+    - llm_api_key / tavily_api_key: 非空且不含空白
+    """
+    errors: list[str] = []
+
+    provider = data.get("llm_provider")
+    if provider is not None:
+        if not isinstance(provider, str) or provider not in PRESETS:
+            errors.append(f"供应商不受支持：{provider}（可选：{', '.join(PRESETS.keys())}）")
+
+    model = data.get("llm_model")
+    if model is not None and (not isinstance(model, str) or not model.strip()):
+        errors.append("模型名称不能为空")
+
+    base_url = data.get("llm_base_url")
+    if base_url:
+        try:
+            parsed = urlsplit(base_url)
+            valid = parsed.scheme in ("http", "https") and bool(parsed.hostname)
+            valid = valid and not any(ch.isspace() for ch in base_url)
+            valid = valid and not parsed.username and not parsed.password and not parsed.fragment
+            _ = parsed.port
+        except (ValueError, TypeError, AttributeError):
+            valid = False
+        if not valid:
+            errors.append("Base URL 必须是有效的 http(s):// 地址")
+
+    for key in ("llm_api_key", "tavily_api_key"):
+        value = data.get(key)
+        if value is not None:
+            if not isinstance(value, str) or not value.strip():
+                errors.append(f"{key} 不能为空")
+            elif any(ch.isspace() for ch in value):
+                errors.append(f"{key} 不应包含空格")
+
+    return errors
+
+
+def _validate_provider_keys(keys: Any) -> None:
+    if not isinstance(keys, dict):
+        raise ConfigValidationError("供应商密钥必须是对象")
+    for provider, key in keys.items():
+        errors = validate_settings({"llm_provider": provider})
+        if key != "":
+            errors.extend(validate_settings({"llm_api_key": key}))
+        if key is None:
+            errors.append("密钥必须是字符串")
+        if errors:
+            raise ConfigValidationError("；".join(errors))
+
 
 class SettingsStore:
     """用户配置存储（JSON 文件）。"""
@@ -56,28 +133,90 @@ class SettingsStore:
         else:
             self._data = {}
 
-    def _save(self):
-        """保存配置到 JSON 文件。"""
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump(self._data, f, ensure_ascii=False, indent=2)
+    def _save(self, data: dict[str, Any]):
+        """原子替换文件，写入成功后才更新内存。"""
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=self.path.parent, delete=False
+            ) as f:
+                temp_path = Path(f.name)
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(temp_path, self.path)
+        finally:
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
+        self._data = data
 
     def get(self, key: str, default: Any = None) -> Any:
         return self._data.get(key, default)
 
-    _SENSITIVE_KEYS = {"llm_api_key", "tavily_api_key"}
-
     def get_all(self) -> dict[str, Any]:
         """返回完整配置（不含敏感密钥，前端展示用）。"""
-        return {k: v for k, v in self._data.items() if k not in self._SENSITIVE_KEYS}
+        return {k: v for k, v in self._data.items() if k not in _SENSITIVE_KEYS}
 
     def get_all_with_key(self) -> dict[str, Any]:
         """返回完整配置（含 api_key，后端使用）。"""
         return dict(self._data)
 
+    # ── 按供应商的 API Key 管理 ──────────────────────────
+
+    def _provider_keys(self) -> dict[str, str]:
+        """内部取 provider_api_keys 字典（自动迁移旧格式）。"""
+        keys = self._data.get("provider_api_keys")
+        keys = dict(keys) if isinstance(keys, dict) else {}
+        # 迁移：旧的单一 llm_api_key 归入当前 provider 名下
+        legacy = self._data.get("llm_api_key")
+        provider = self._data.get("llm_provider")
+        if legacy and provider and provider not in keys:
+            keys[provider] = legacy
+        return keys
+
+    def get_key_for_provider(self, provider: str | None) -> str:
+        """供应商之间不共享密钥；仅兼容未标注供应商的旧配置。"""
+        if not provider:
+            return self._data.get("llm_api_key", "")
+        keys = self._provider_keys()
+        if provider in keys:
+            return keys[provider]
+        if not self._data.get("llm_provider"):
+            return self._data.get("llm_api_key", "")
+        return ""
+
+    def set_key_for_provider(self, provider: str, api_key: str) -> None:
+        """为指定供应商保存 API Key（写 provider_api_keys，并同步 llm_api_key）。"""
+        if not provider or provider not in PRESETS:
+            return
+        self.update({"provider_api_keys": {provider: api_key}})
+
+    def providers_with_keys(self) -> set[str]:
+        """已配置 API Key 的供应商集合。"""
+        keys = self._provider_keys()
+        return {p for p, k in keys.items() if k}
+
     def update(self, data: dict[str, Any]) -> dict[str, Any]:
-        """更新配置并保存。"""
-        self._data.update(data)
-        self._save()
+        """更新配置并保存（自动过滤白名单外的键，非法值抛 ConfigValidationError）。"""
+        # 只保留白名单字段
+        filtered = {k: v for k, v in data.items() if k in ALLOWED_KEYS}
+        errors = validate_settings(filtered)
+        if errors:
+            raise ConfigValidationError("；".join(errors))
+        provider_keys = filtered.pop("provider_api_keys", {})
+        _validate_provider_keys(provider_keys)
+        keys = self._provider_keys()
+        updated = {**self._data, **filtered}
+        provider = updated.get("llm_provider")
+        if "llm_api_key" in filtered and provider in PRESETS:
+            keys[provider] = filtered["llm_api_key"]
+        for name, key in provider_keys.items():
+            if key:
+                keys[name] = key
+            else:
+                keys.pop(name, None)
+        updated["provider_api_keys"] = keys
+        if provider:
+            updated["llm_api_key"] = keys.get(provider, "")
+        self._save(updated)
         return self.get_all()
 
     def reset(self) -> dict[str, Any]:
